@@ -1,7 +1,5 @@
-/*
- * This code has purposely been written using imperative code and ES5 syntax
- * in order to keep its transpiled counterpart small and efficient.
- */
+const invariant = require('invariant');
+const err = msg => `combine-dependant-reducers: ${msg}`;
 
 function getOrderOfKeysWithNext(keysWithNext, structure) {
   const remainingKeysWithNext = [];
@@ -14,7 +12,10 @@ function getOrderOfKeysWithNext(keysWithNext, structure) {
     const current = stack[stack.length - 1];
 
     structure[current].next.forEach((key) => {
-      if (visitedKeys[key]) throw new Error('Circular dependency detected');
+      invariant(
+        !visitedKeys[key],
+        err('Circular dependency detected')
+      );
     });
 
     const unresolvedDependencies = structure[current].next.filter(key =>
@@ -39,27 +40,29 @@ function getOrderOfKeysWithNext(keysWithNext, structure) {
   return result;
 }
 
+const defaultGetDependencies = () => [];
+
+const pushPropsOptions = {
+  '@next': ['next'],
+  '@prev': ['prev'],
+  '@both': ['prev', 'next'],
+};
+
 function getStructureFor(key, input) {
-  const result = { prev: [], next: [], getDependecies: () => [] };
+  const result = { prev: [], next: [], getDependencies: defaultGetDependencies };
 
   for (let i = 0; i < input[key].length - 1; i += 1) {
     const parts = input[key][i].split(' ');
     const type = parts[0];
     const dependencyKey = parts[1];
 
-    const pushProps =
-      type === '@next' ? ['next'] :
-      type === '@prev' ? ['prev'] :
-      type === '@both' ? ['prev', 'next'] : undefined;
-
-    if (pushProps === undefined) throw new Error('Wrong prefix');
-
+    const pushProps = pushPropsOptions[type];
     pushProps.forEach((prop) => {
       result[prop].push(dependencyKey);
     });
 
-    const prevGetDependencies = result.getDependecies;
-    result.getDependecies = (prev, next) => {
+    const prevGetDependencies = result.getDependencies;
+    result.getDependencies = (prev, next) => {
       const options = { prev, next };
       const res = prevGetDependencies(prev, next);
       pushProps.forEach((prop) => {
@@ -74,16 +77,43 @@ function getStructureFor(key, input) {
 
 function getStructure(input) {
   const result = {};
+  const defaultEntry = { prev: [], next: [], getDependencies: defaultGetDependencies };
   Object.keys(input).forEach((key) => {
     result[key] = !Array.isArray(input[key])
-      ? { prev: [], next: [] }
+      ? defaultEntry
       : getStructureFor(key, input);
   });
 
   return result;
 }
 
+function validateInput(input) {
+  invariant(typeof input === 'object', err('Wrong input received, expected an Object'));
+  Object.keys(input).forEach(key => {
+    const val = input[key];
+    if (Array.isArray(val)) {
+      invariant(val.length > 0, err(`An empty Array was found on entry '${key}'.`));
+      const fn = val[val.length - 1];
+      invariant(typeof fn === 'function', err(`The last value of entry '${key}' should be a function`));
+      const msg = err(`Wrong dependency found on entry '${key}'.`);
+      for (let i = 0; i < val.length - 1; i++) {
+        invariant(typeof val[i] === 'string', msg);
+        const dependencyParts = val[i].split(' ');
+        invariant(dependencyParts.length === 2 , msg);
+        invariant(['@prev', '@both', '@next'].indexOf(dependencyParts[0]) > -1, msg);
+        invariant(input[dependencyParts[1]] !== undefined, msg);
+      }
+    } else {
+      invariant(
+        typeof val === 'function',
+        err(`wrong value received on entry '${key}', expected a function`)
+      );
+    }
+  });
+}
+
 module.exports = (input) => {
+  validateInput(input);
   const structure = getStructure(input);
 
   const withoutNextDependencies = [];
@@ -100,18 +130,13 @@ module.exports = (input) => {
     getOrderOfKeysWithNext(withNextDependencies, structure)
   );
 
-  return (state = {}, action) => {
-    const result = {};
-
-    executionOrder.forEach((key) => {
-      const reducer = (Array.isArray(input[key]))
-        ? input[key][input[key].length - 1].apply(
-            null, structure[key].getDependecies(state, result))
-        : input[key];
-
-      result[key] = reducer(state[key], action);
-    });
-
+  return (state = {}, action) => executionOrder.reduce((result, key) => {
+    const inputEntry = input[key];
+    const reducer = Array.isArray(inputEntry)
+      ? inputEntry[inputEntry.length - 1]
+      : inputEntry;
+    const dependencies = structure[key].getDependencies(state, result);
+    result[key] = reducer.apply(null, [state[key], action].concat(dependencies));
     return result;
-  };
+  }, {});
 };
