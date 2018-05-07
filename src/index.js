@@ -2,45 +2,38 @@ const invariant = require('invariant');
 const err = msg => `combine-dependant-reducers: ${msg}`;
 
 function getOrderOfKeysWithNext(keysWithNext, structure) {
-  const remainingKeysWithNext = [];
+  const remainingKeysWithNext = {};
   keysWithNext.forEach((key) => { remainingKeysWithNext[key] = true; });
   const result = [];
   const stack = [keysWithNext[0]];
-  const visitedKeys = { [stack[0]]: true };
 
   while (result.length < keysWithNext.length) {
     const current = stack[stack.length - 1];
 
     structure[current].next.forEach((key) => {
       invariant(
-        !visitedKeys[key],
+        stack.indexOf(key) === -1, 
         err('Circular dependency detected')
       );
     });
 
-    const unresolvedDependencies = structure[current].next.filter(key =>
-      (keysWithNext.indexOf(key) !== -1 && remainingKeysWithNext[key]));
+    const unresolvedDependencies = structure[current].next
+      .filter(key => remainingKeysWithNext[key]);
 
     if (unresolvedDependencies.length === 0) {
-      result.push(current);
-      stack.pop();
-      delete visitedKeys[current];
+      result.push(stack.pop());
       delete remainingKeysWithNext[current];
 
       if (stack.length === 0 && result.length < keysWithNext.length) {
         stack.push(Object.keys(remainingKeysWithNext)[0]);
-        visitedKeys[stack[0]] = true;
       }
     } else {
       stack.push(unresolvedDependencies[0]);
-      visitedKeys[unresolvedDependencies[0]] = true;
     }
   }
 
   return result;
 }
-
-const defaultGetDependencies = () => [];
 
 const pushPropsOptions = {
   '@next': ['next'],
@@ -49,7 +42,9 @@ const pushPropsOptions = {
 };
 
 function getStructureFor(key, input) {
-  const result = { prev: [], next: [], getDependencies: defaultGetDependencies };
+  const result = { prev: [], next: [], accessOrder: [] };
+
+  if (!Array.isArray(input[key])) return result;
 
   for (let i = 0; i < input[key].length - 1; i += 1) {
     const parts = input[key][i].split(' ');
@@ -59,17 +54,8 @@ function getStructureFor(key, input) {
     const pushProps = pushPropsOptions[type];
     pushProps.forEach((prop) => {
       result[prop].push(dependencyKey);
+      result.accessOrder.push([prop, dependencyKey]);
     });
-
-    const prevGetDependencies = result.getDependencies;
-    result.getDependencies = (prev, next) => {
-      const options = { prev, next };
-      const res = prevGetDependencies(prev, next);
-      pushProps.forEach((prop) => {
-        res.push(options[prop][dependencyKey]);
-      });
-      return res;
-    };
   }
 
   return result;
@@ -77,11 +63,8 @@ function getStructureFor(key, input) {
 
 function getStructure(input) {
   const result = {};
-  const defaultEntry = { prev: [], next: [], getDependencies: defaultGetDependencies };
   Object.keys(input).forEach((key) => {
-    result[key] = !Array.isArray(input[key])
-      ? defaultEntry
-      : getStructureFor(key, input);
+    result[key] = getStructureFor(key, input);
   });
 
   return result;
@@ -112,6 +95,11 @@ function validateInput(input) {
   });
 }
 
+function getDependencies(accessOrder, prev, next) {
+  const states = {prev, next};
+  return accessOrder.map(([prevNext, key]) => states[prevNext][key]);
+}
+
 module.exports = (input) => {
   validateInput(input);
   const structure = getStructure(input);
@@ -135,7 +123,7 @@ module.exports = (input) => {
     const reducer = Array.isArray(inputEntry)
       ? inputEntry[inputEntry.length - 1]
       : inputEntry;
-    const dependencies = structure[key].getDependencies(state, result);
+    const dependencies = getDependencies(structure[key].accessOrder, state, result);
     result[key] = reducer.apply(null, [state[key], action].concat(dependencies));
     return result;
   }, {});
