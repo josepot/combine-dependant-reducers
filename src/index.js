@@ -41,36 +41,39 @@ const pushPropsOptions = {
   '@both': ['prev', 'next'],
 };
 
-function getStructureFor(key, input) {
+function getStructureFor(key, input, argsObj) {
   const result = { prev: [], next: [], accessOrder: [] };
 
   if (!Array.isArray(input[key])) return result;
 
   for (let i = 0; i < input[key].length - 1; i += 1) {
-    const parts = input[key][i].split(' ');
-    const type = parts[0];
-    const dependencyKey = parts[1];
+    const [type, name] = input[key][i].split(' ');
+
+    if (type === '@arg') {
+      result.accessOrder.push(['args', argsObj[name]]);
+      continue;
+    }
 
     const pushProps = pushPropsOptions[type];
     pushProps.forEach((prop) => {
-      result[prop].push(dependencyKey);
-      result.accessOrder.push([prop, dependencyKey]);
+      result[prop].push(name);
+      result.accessOrder.push([prop, name]);
     });
   }
 
   return result;
 }
 
-function getStructure(input) {
+function getStructure(input, argsObj) {
   const result = {};
   Object.keys(input).forEach((key) => {
-    result[key] = getStructureFor(key, input);
+    result[key] = getStructureFor(key, input, argsObj);
   });
 
   return result;
 }
 
-function validateInput(input) {
+function validateInput(input, args) {
   invariant(typeof input === 'object', err('Wrong input received, expected an Object'));
   Object.keys(input).forEach(key => {
     const val = input[key];
@@ -83,8 +86,9 @@ function validateInput(input) {
         invariant(typeof val[i] === 'string', msg);
         const dependencyParts = val[i].split(' ');
         invariant(dependencyParts.length === 2 , msg);
-        invariant(['@prev', '@both', '@next'].indexOf(dependencyParts[0]) > -1, msg);
-        invariant(input[dependencyParts[1]] !== undefined, msg);
+        const [type, name] = dependencyParts;
+        invariant(['@prev', '@next', '@both', '@arg'].indexOf(type) > -1, msg);
+        invariant((type === '@arg' ? args : input)[name] !== undefined, msg);
       }
     } else {
       invariant(
@@ -95,14 +99,18 @@ function validateInput(input) {
   });
 }
 
-function getDependencies(accessOrder, prev, next) {
-  const states = {prev, next};
-  return accessOrder.map(([prevNext, key]) => states[prevNext][key]);
+function getDependencies(accessOrder, prev, next, args) {
+  const dependencies = {prev, next, args};
+  return accessOrder.map(([type, key]) => dependencies[type][key]);
 }
 
-module.exports = (input) => {
-  validateInput(input);
-  const structure = getStructure(input);
+module.exports = (input, ...argDependencies) => {
+  const argsDependenciesObj = argDependencies.reduce(
+    (res, key, idx) => Object.assign(res, {[key]: idx}),
+    {}
+  );
+  validateInput(input, argsDependenciesObj);
+  const structure = getStructure(input, argsDependenciesObj);
 
   const withoutNextDependencies = [];
   const withNextDependencies = [];
@@ -118,12 +126,12 @@ module.exports = (input) => {
     getOrderOfKeysWithNext(withNextDependencies, structure)
   );
 
-  return (state = {}, action) => executionOrder.reduce((result, key) => {
+  return (state = {}, action, ...args) => executionOrder.reduce((result, key) => {
     const inputEntry = input[key];
     const reducer = Array.isArray(inputEntry)
       ? inputEntry[inputEntry.length - 1]
       : inputEntry;
-    const dependencies = getDependencies(structure[key].accessOrder, state, result);
+    const dependencies = getDependencies(structure[key].accessOrder, state, result, args);
     result[key] = reducer.apply(null, [state[key], action].concat(dependencies));
     return result;
   }, {});

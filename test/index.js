@@ -72,6 +72,26 @@ describe('combineDependantReducers', () => {
       });
     });
 
+    it('param', () => {
+      const subReducer = (state = 0, action, ...dependencies) =>
+        state + dependencies.reduce((a, b = 0) => a + b, 0);
+
+      const reducer = combineDependantReducers({
+        a: ['@arg foo', '@arg bar', subReducer],
+        b: ['@next a', '@arg bar', subReducer],
+        c: ['@prev b', '@arg bar', subReducer]
+      }, 'foo', 'bar');
+
+      const initialstate = reducer(undefined, {});
+      expect(initialstate).toEqual({a: 0, b: 0, c: 0});
+
+      expect(reducer(initialstate, {}, 100, 1000)).toEqual({
+        a: 1100,
+        b: 2100,
+        c: 1000,
+      });
+    });
+
     it('should handle complex cases', () => {
       const a = (state = 0, { type }) => (type === 'INC'
         ? state + 1
