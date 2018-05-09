@@ -1,3 +1,29 @@
 {
-  "presets": ["es2015"]
+  "presets": [
+    [
+      "env",
+      {
+        "targets": {
+          "browsers": [
+            "ie >= 11"
+          ]
+        },
+        "exclude": ["transform-async-to-generator", "transform-regenerator"],
+        "modules": false,
+        "loose": true
+      }
+    ]
+  ],
+  "env": {
+    "commonjs": {
+      "presets": [
+        [
+          "env",
+          {
+            "loose": true
+          }
+        ]
+      ]
+    }
+  }
 }
