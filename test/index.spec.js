@@ -132,4 +132,13 @@ describe('combineDependantReducers', () => {
       })
     ).toThrow('Circular dependency detected')
   })
+
+  it('should return the same state if nothing changes', () => {
+    const reducer = combineDependantReducers({
+      a: x => x,
+      b: x => x
+    })
+    const initialState = { a: 1, b: 2 }
+    expect(reducer(initialState, {})).toBe(initialState)
+  })
 })

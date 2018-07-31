@@ -140,8 +140,10 @@ export default (input, ...argDependencies) => {
     getOrderOfKeysWithNext(withNextDependencies, structure)
   )
 
-  return (state = {}, action, ...args) =>
-    executionOrder.reduce((result, key) => {
+  return (state = {}, action, ...args) => {
+    let hasDifferences = false
+
+    const newState = executionOrder.reduce((result, key) => {
       const inputEntry = input[key]
       const reducer = Array.isArray(inputEntry) ? inputEntry[0] : inputEntry
       const dependencies = getDependencies(
@@ -150,10 +152,12 @@ export default (input, ...argDependencies) => {
         result,
         args
       )
-      result[key] = reducer.apply(
-        null,
-        [state[key], action].concat(dependencies)
-      )
+      result[key] = reducer.apply(null, [state[key], action, ...dependencies])
+
+      if (result[key] !== state[key]) hasDifferences = true
       return result
     }, {})
+
+    return hasDifferences ? newState : state
+  }
 }
