@@ -42,7 +42,7 @@ const pushPropsOptions = {
   '@both': ['prev', 'next']
 }
 
-function getStructureFor(key, entry, argsObj) {
+function getStructureFor(key, entry) {
   const result = { prev: [], next: [], accessOrder: [] }
 
   if (!Array.isArray(entry)) return result
@@ -52,7 +52,7 @@ function getStructureFor(key, entry, argsObj) {
     .map(d => d.split(' '))
     .forEach(([type, name]) => {
       if (type === '@arg') {
-        result.accessOrder.push(['args', argsObj[name]])
+        result.accessOrder.push(['args', parseInt(name, 10)])
       } else {
         const pushProps = pushPropsOptions[type]
         pushProps.forEach(prop => {
@@ -65,16 +65,16 @@ function getStructureFor(key, entry, argsObj) {
   return result
 }
 
-function getStructure(input, argsObj) {
+function getStructure(input) {
   const result = {}
   Object.keys(input).forEach(key => {
-    result[key] = getStructureFor(key, input[key], argsObj)
+    result[key] = getStructureFor(key, input[key])
   })
 
   return result
 }
 
-function validateInput(input, args) {
+function validateInput(input) {
   invariant(
     typeof input === 'object',
     err('Wrong input received, expected an Object')
@@ -96,9 +96,8 @@ function validateInput(input, args) {
         invariant(typeof dependency === 'string', msg)
         const dependencyParts = dependency.split(' ')
         invariant(dependencyParts.length === 2, msg)
-        const [type, name] = dependencyParts
+        const [type] = dependencyParts
         invariant(['@prev', '@next', '@both', '@arg'].indexOf(type) > -1, msg)
-        invariant((type === '@arg' ? args : input)[name] !== undefined, msg)
       })
     } else {
       invariant(
@@ -114,16 +113,11 @@ function getDependencies(accessOrder, prev, next, args) {
   return accessOrder.map(([type, key]) => dependencies[type][key])
 }
 
-export default (input, ...argDependencies) => {
-  const argsDependenciesObj = argDependencies.reduce(
-    (res, key, idx) => Object.assign(res, { [key]: idx }),
-    {}
-  )
-
+export default (input) => {
   if (process.env.NODE_ENV !== 'production') {
-    validateInput(input, argsDependenciesObj)
+    validateInput(input)
   }
-  const structure = getStructure(input, argsDependenciesObj)
+  const structure = getStructure(input)
 
   const withoutNextDependencies = []
   const withNextDependencies = []
@@ -140,19 +134,20 @@ export default (input, ...argDependencies) => {
     getOrderOfKeysWithNext(withNextDependencies, structure)
   )
 
-  return (state = {}, action, ...args) => {
+  return (state = {}, originalAction = {}) => {
     let hasDifferences = false
 
     const newState = executionOrder.reduce((result, key) => {
       const inputEntry = input[key]
       const reducer = Array.isArray(inputEntry) ? inputEntry[0] : inputEntry
-      const dependencies = getDependencies(
+      const args = getDependencies(
         structure[key].accessOrder,
         state,
         result,
-        args
+        originalAction.args || []
       )
-      result[key] = reducer.apply(null, [state[key], action, ...dependencies])
+      const action = args.length === 0 ? originalAction : Object.assign({}, originalAction, {args})
+      result[key] = reducer(state[key], action)
 
       if (result[key] !== state[key]) hasDifferences = true
       return result

@@ -4,7 +4,7 @@ import combineDependantReducers from '../src/'
 describe('combineDependantReducers', () => {
   it('next', () => {
     const id = (state = 0, { type }) => (type === 'NEW' ? state + 1 : state)
-    const idsHistory = (state = [0], { type }, nextId) =>
+    const idsHistory = (state = [0], { type, args: [nextId] }) =>
       type === undefined ? state : [nextId, ...state]
 
     let reducer = combineDependantReducers({
@@ -23,7 +23,7 @@ describe('combineDependantReducers', () => {
 
   it('prev', () => {
     const id = (state = 0, { type }) => (type === 'NEW' ? state + 1 : state)
-    const idsHistory = (state = [], { type }, prevId) =>
+    const idsHistory = (state = [], { type, args: [prevId] }) =>
       type === undefined ? state : [prevId, ...state]
 
     let reducer = combineDependantReducers({
@@ -46,7 +46,7 @@ describe('combineDependantReducers', () => {
 
   it('both', () => {
     const id = (state = 0, { type }) => (type === 'NEW' ? state + 1 : state)
-    const idsHistory = (state = [], { type }, prevId, nextId) =>
+    const idsHistory = (state = [], { type, args: [prevId, nextId] }) =>
       type === undefined ? state : [[prevId, nextId], ...state]
 
     let reducer = combineDependantReducers({
@@ -64,23 +64,19 @@ describe('combineDependantReducers', () => {
   })
 
   it('param', () => {
-    const subReducer = (state = 0, action, ...dependencies) =>
-      state + dependencies.reduce((a, b = 0) => a + b, 0)
+    const subReducer = (state = 0, {args = []}) =>
+      state + args.reduce((a, b = 0) => a + b, 0)
 
-    const reducer = combineDependantReducers(
-      {
-        a: [subReducer, '@arg foo', '@arg bar'],
-        b: [subReducer, '@next a', '@arg bar'],
-        c: [subReducer, '@prev b', '@arg bar']
-      },
-      'foo',
-      'bar'
-    )
+    const reducer = combineDependantReducers({
+      a: [subReducer, '@arg 0', '@arg 1'],
+      b: [subReducer, '@next a', '@arg 1'],
+      c: [subReducer, '@prev b', '@arg 1']
+    })
 
     const initialstate = reducer(undefined, {})
     expect(initialstate).toEqual({ a: 0, b: 0, c: 0 })
 
-    expect(reducer(initialstate, {}, 100, 1000)).toEqual({
+    expect(reducer(initialstate, {args: [100, 1000]})).toEqual({
       a: 1100,
       b: 2100,
       c: 1000
@@ -90,7 +86,7 @@ describe('combineDependantReducers', () => {
   it('should handle complex cases', () => {
     const a = (state = 0, { type }) => (type === 'INC' ? state + 1 : state)
 
-    const others = (state = 0, { type }, ...numbers) =>
+    const others = (state = 0, { type, args: numbers }) =>
       type === 'INC'
         ? state + numbers.reduce((res, number) => res + number, 0)
         : state
