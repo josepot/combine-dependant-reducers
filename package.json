@@ -1,6 +1,6 @@
 {
   "name": "combine-dependant-reducers",
-  "version": "2.0.1",
+  "version": "3.0.0",
   "license": "MIT",
   "description": "Combine dependant reducers",
   "repository": "github:josepot/combine-dependant-reducers",
