@@ -64,7 +64,7 @@ describe('combineDependantReducers', () => {
   })
 
   it('param', () => {
-    const subReducer = (state = 0, {args = []}) =>
+    const subReducer = (state = 0, { args = [] }) =>
       state + args.reduce((a, b = 0) => a + b, 0)
 
     const reducer = combineDependantReducers({
@@ -76,7 +76,7 @@ describe('combineDependantReducers', () => {
     const initialstate = reducer(undefined, {})
     expect(initialstate).toEqual({ a: 0, b: 0, c: 0 })
 
-    expect(reducer(initialstate, {args: [100, 1000]})).toEqual({
+    expect(reducer(initialstate, { args: [100, 1000] })).toEqual({
       a: 1100,
       b: 2100,
       c: 1000

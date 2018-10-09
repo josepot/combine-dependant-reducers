@@ -76,17 +76,11 @@ function getStructure(input) {
 }
 
 function validateInput(input) {
-  err(
-    typeof input === 'object',
-    'Wrong input received, expected an Object'
-  )
+  err(typeof input === 'object', 'Wrong input received, expected an Object')
   Object.keys(input).forEach(key => {
     const entry = input[key]
     if (Array.isArray(entry)) {
-      err(
-        entry.length > 0,
-        `An empty Array was found on entry '${key}'.`
-      )
+      err(entry.length > 0, `An empty Array was found on entry '${key}'.`)
       const [fn, ...dependencies] = entry
       err(
         typeof fn === 'function',
@@ -114,7 +108,7 @@ function getDependencies(accessOrder, prev, next, args) {
   return accessOrder.map(([type, key]) => dependencies[type][key])
 }
 
-export default (input) => {
+export default input => {
   if (process.env.NODE_ENV !== 'production') {
     validateInput(input)
   }
@@ -147,7 +141,10 @@ export default (input) => {
         result,
         originalAction.args || []
       )
-      const action = args.length === 0 ? originalAction : Object.assign({}, originalAction, {args})
+      const action =
+        args.length === 0
+          ? originalAction
+          : Object.assign({}, originalAction, { args })
       result[key] = reducer(state[key], action)
 
       if (result[key] !== state[key]) hasDifferences = true
