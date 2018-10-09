@@ -1,5 +1,6 @@
-const invariant = require('invariant')
-const err = msg => `combine-dependant-reducers: ${msg}`
+const err = (ok, msg) => {
+  if (!ok) throw new Error(`combine-dependant-reducers: ${msg}`)
+}
 
 function getOrderOfKeysWithNext(keysWithNext, structure) {
   const remainingKeysWithNext = {}
@@ -13,7 +14,7 @@ function getOrderOfKeysWithNext(keysWithNext, structure) {
     const current = stack[stack.length - 1]
 
     structure[current].next.forEach(key => {
-      invariant(stack.indexOf(key) === -1, err('Circular dependency detected'))
+      err(stack.indexOf(key) === -1, 'Circular dependency detected')
     })
 
     const unresolvedDependencies = structure[current].next.filter(
@@ -75,34 +76,34 @@ function getStructure(input) {
 }
 
 function validateInput(input) {
-  invariant(
+  err(
     typeof input === 'object',
-    err('Wrong input received, expected an Object')
+    'Wrong input received, expected an Object'
   )
   Object.keys(input).forEach(key => {
     const entry = input[key]
     if (Array.isArray(entry)) {
-      invariant(
+      err(
         entry.length > 0,
-        err(`An empty Array was found on entry '${key}'.`)
+        `An empty Array was found on entry '${key}'.`
       )
       const [fn, ...dependencies] = entry
-      invariant(
+      err(
         typeof fn === 'function',
-        err(`The last value of entry '${key}' should be a function`)
+        `The last value of entry '${key}' should be a function`
       )
-      const msg = err(`Wrong dependency found on entry '${key}'.`)
+      const msg = `Wrong dependency found on entry '${key}'.`
       dependencies.forEach(dependency => {
-        invariant(typeof dependency === 'string', msg)
+        err(typeof dependency === 'string', msg)
         const dependencyParts = dependency.split(' ')
-        invariant(dependencyParts.length === 2, msg)
+        err(dependencyParts.length === 2, msg)
         const [type] = dependencyParts
-        invariant(['@prev', '@next', '@both', '@arg'].indexOf(type) > -1, msg)
+        err(['@prev', '@next', '@both', '@arg'].indexOf(type) > -1, msg)
       })
     } else {
-      invariant(
+      err(
         typeof entry === 'function',
-        err(`wrong value received on entry '${key}', expected a function`)
+        `wrong value received on entry '${key}', expected a function`
       )
     }
   })
