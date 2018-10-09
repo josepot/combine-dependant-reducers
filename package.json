@@ -41,7 +41,6 @@
     "url": "https://github.com/josepot/combine-dependant-reducers/issues"
   },
   "dependencies": {
-    "invariant": "^2.2.4",
     "loose-envify": "^1.1.0"
   },
   "devDependencies": {
